@@ -1,0 +1,201 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String     @unique
+  password      String? // Add this line
+  emailVerified DateTime?
+  image         String?
+  skill_level   SkillLevel @default(BEGINNER_2_0)
+  role          UserRole   @default(USER) // New field for user role
+
+  bookings       Booking[]
+  courts         Court[]             @relation("UserCourts") // One-to-many relation
+  ownerId        String? // Optional because courts is optional
+  playerBookings PlayersOnBookings[]
+  accounts       Account[]
+  sessions       Session[]
+  username       String?
+  bio            String?
+  phone          String?
+  address        String?
+  Event          Event[]
+  eventParticipations EventParticipant[]
+  eventWaitlists      EventWaitlist[]
+}
+
+model Court {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  is_indoor   Boolean @default(false)
+  capacity    Int     @default(4)
+
+  bookings Booking[]
+  events      Event[]            @relation("EventToCourt")
+  eventCourts   CourtsOnEvents[]
+
+  owner    User?     @relation("UserCourts", fields: [ownerId], references: [id]) // Optional relation
+  ownerId  String? // Optional because owner is optional
+  active   Boolean   @default(true)
+  
+}
+
+model Booking {
+  id         String        @id @default(cuid())
+  start_time DateTime
+  end_time   DateTime
+  status     BookingStatus @default(SCHEDULED)
+
+  court   Court  @relation(fields: [courtId], references: [id])
+  courtId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  players PlayersOnBookings[]
+  notes   String?
+}
+
+model PlayersOnBookings {
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId String
+
+  @@id([userId, bookingId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  title           String
+  start           DateTime
+  end             DateTime
+  type            String
+  min_skill       String?
+  max_skill       String?
+  max_players     Int      @default(4)
+  current_players Int      @default(0)
+  notes           String?
+  is_bookable     Boolean  @default(true)
+
+  court           Court?    @relation("EventToCourt", fields: [courtId], references: [id])
+  courtId         String?
+  courts          CourtsOnEvents[]
+  
+  participants    EventParticipant[]
+  waitlist        EventWaitlist[]
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CourtsOnEvents {
+  court     Court  @relation(fields: [courtId], references: [id])
+  courtId   String
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+
+  @@id([courtId, eventId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model EventParticipant {
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  joinedAt  DateTime @default(now())
+
+  @@id([userId, eventId])
+}
+
+model EventWaitlist {
+  user      User    @relation(fields: [userId], references: [id])
+  userId    String
+  event     Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  joinedAt  DateTime @default(now())
+
+  @@id([userId, eventId])
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  PRO
+  
+  BEGINNER_2_0           // Complete beginner, learning basic rules
+  BEGINNER_2_25          // Developing basic skills
+  BEGINNER_2_5           // Consistent basic shots, still developing
+  RISING_BEGINNER_2_75   // Transitioning from beginner to intermediate
+  LOW_INTERMEDIATE_3_0   // Basic intermediate skills
+  INTERMEDIATE_3_25      // Consistent intermediate play
+  INTERMEDIATE_3_5       // Solid intermediate player
+  RISING_INTERMEDIATE_3_75 // Moving toward advanced play
+  LOW_ADVANCED_4_0       // Beginning advanced skills
+  ADVANCED_4_25          // Consistent advanced play
+  ADVANCED_4_5           // Strong advanced player
+  RISING_ADVANCED_4_75   // Nearly tournament-level play
+  TOURNAMENT_5_0         // Tournament-level player
+  PRO_5_5                // Professional level player
+}
+
+enum BookingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  COURT_MANAGER
+}
