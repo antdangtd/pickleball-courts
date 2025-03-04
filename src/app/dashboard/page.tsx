@@ -3,9 +3,9 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from "next-auth/react"
-import { redirect } from "next/navigation"
+import { redirect, useSearchParams } from "next/navigation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,20 @@ export default function Dashboard() {
     }
   })
 
+  // Get the tab from URL query parameters
+  const searchParams = useSearchParams()
+  const tabParam = searchParams.get('tab')
+
+  // Initialize with either the URL parameter or 'overview'
   const [activeTab, setActiveTab] = useState('overview')
+  
+  // Update active tab when URL parameter changes
+  useEffect(() => {
+    if (tabParam && ['overview', 'bookings', 'calendar', 'manage-courts', 'manage-users'].includes(tabParam)) {
+      setActiveTab(tabParam)
+    }
+  }, [tabParam])
+
   const isAdmin = session?.user?.role === 'ADMIN'
 
   if (status === "loading") {
@@ -71,8 +84,8 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="flex flex-col space-y-4">
                 <p>Quick and easy court reservation</p>
-                <Button asChild>
-                  <Link href="/bookings/new">Book Now</Link>
+                <Button variant="default" asChild>
+                  <Link href="/dashboard?tab=calendar">Book Now</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -100,7 +113,7 @@ export default function Dashboard() {
             <CardContent>
               <p className="mb-4">You don't have any upcoming bookings.</p>
               <Button asChild>
-                <Link href="/bookings/new">Book a Court</Link>
+                <Link href="/dashboard?tab=calendar">Book a Court</Link>
               </Button>
             </CardContent>
           </Card>
