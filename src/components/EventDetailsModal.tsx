@@ -47,6 +47,7 @@ export default function EventDetailsModal({
 
   // Fetch event details when modal opens
   useEffect(() => {
+    console.log("Modal Opened, Event Data:", event);
     if (isOpen && event) {
       fetchEventDetails();
     }
@@ -109,49 +110,32 @@ export default function EventDetailsModal({
       });
       return false;
     }
-    
-    // Get the user's skill level from session (camelCase - skillLevel)
+  
     const userSkillLevel = session.user.skillLevel;
-    
+  
     if (!userSkillLevel) {
       console.log("User skill level not found in session");
       return false;
     }
-    
-    // Get complete skill level list from your schema
+  
     const skillLevels = [
-      'BEGINNER',
-      'BEGINNER_2_0',
-      'BEGINNER_2_25',
-      'BEGINNER_2_5',
-      'RISING_BEGINNER_2_75',
-      'LOW_INTERMEDIATE_3_0',
-      'INTERMEDIATE',
-      'INTERMEDIATE_3_25',
-      'INTERMEDIATE_3_5',
-      'RISING_INTERMEDIATE_3_75',
-      'LOW_ADVANCED_4_0',
-      'ADVANCED',
-      'ADVANCED_4_25',
-      'ADVANCED_4_5',
-      'RISING_ADVANCED_4_75',
-      'TOURNAMENT_5_0',
-      'PRO',
-      'PRO_5_5'
+      'BEGINNER', 'BEGINNER_2_0', 'BEGINNER_2_25', 'BEGINNER_2_5',
+      'RISING_BEGINNER_2_75', 'LOW_INTERMEDIATE_3_0', 'INTERMEDIATE',
+      'INTERMEDIATE_3_25', 'INTERMEDIATE_3_5', 'RISING_INTERMEDIATE_3_75',
+      'LOW_ADVANCED_4_0', 'ADVANCED', 'ADVANCED_4_25', 'ADVANCED_4_5',
+      'RISING_ADVANCED_4_75', 'TOURNAMENT_5_0', 'PRO', 'PRO_5_5'
     ];
-    
-    // Debug output
+  
+    const userSkillIndex = skillLevels.indexOf(userSkillLevel);
+    const minSkillIndex = eventDetails.min_skill ? skillLevels.indexOf(eventDetails.min_skill) : 0;
+    const maxSkillIndex = eventDetails.max_skill ? skillLevels.indexOf(eventDetails.max_skill) : skillLevels.length - 1;
+  
     console.log("Comparing skill levels:", {
       userSkill: userSkillLevel,
       minSkill: eventDetails.min_skill,
       maxSkill: eventDetails.max_skill
     });
-    
-    const userSkillIndex = skillLevels.indexOf(userSkillLevel);
-    const minSkillIndex = eventDetails.min_skill ? skillLevels.indexOf(eventDetails.min_skill) : 0;
-    const maxSkillIndex = eventDetails.max_skill ? skillLevels.indexOf(eventDetails.max_skill) : skillLevels.length - 1;
-    
-    // Add detailed debug output
+  
     console.log("Skill level comparison details:", {
       userSkillLevel,
       userSkillIndex,
@@ -160,39 +144,33 @@ export default function EventDetailsModal({
       maxSkill: eventDetails.max_skill,
       maxSkillIndex,
       meetsRequirements: userSkillIndex >= minSkillIndex && userSkillIndex <= maxSkillIndex,
-      // For debugging: is userSkillIndex valid?
       userSkillFound: userSkillIndex !== -1,
       minSkillFound: minSkillIndex !== -1,
       maxSkillFound: maxSkillIndex !== -1
     });
-
-    // Check for -1 index (not found in array)
+  
+    // If any skill level is not found, allow fallback logic
     if (userSkillIndex === -1 || minSkillIndex === -1 || maxSkillIndex === -1) {
-      console.error("One or more skill levels not found in skill levels array!");
+      console.warn("One or more skill levels not found in skill levels array!");
       
-      // Fallback logic for when exact comparison fails
       if (userSkillIndex === -1) {
-        // Try to handle special cases
         const userSkill = String(userSkillLevel).toLowerCase();
         if (userSkill.includes('beginner')) {
-          console.log("User has beginner skill, allowing access to beginner events");
           return eventDetails.min_skill?.toLowerCase().includes('beginner') || !eventDetails.min_skill;
         } else if (userSkill.includes('intermediate')) {
-          console.log("User has intermediate skill");
           return eventDetails.min_skill?.toLowerCase().includes('beginner') || 
                 eventDetails.min_skill?.toLowerCase().includes('intermediate') || 
                 !eventDetails.min_skill;
         }
       }
-      
-      // If we can't determine, default to allowing access
+  
       console.log("Defaulting to allowing access due to comparison issues");
       return true;
     }
-    
-    // Normal comparison
+  
     return userSkillIndex >= minSkillIndex && userSkillIndex <= maxSkillIndex;
   };
+  
 
   // Join the event
   const handleJoinEvent = async () => {
