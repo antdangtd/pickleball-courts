@@ -6,7 +6,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import prisma from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { Session } from "next-auth";
-import { UserRole } from "@prisma/client";
+import { UserRole, SkillLevel } from "@prisma/client";
 
 // Utility functions moved outside of the authOptions
 export async function isAdmin(session?: Session | null) {
@@ -26,10 +26,26 @@ export async function isAuthorized(session?: Session | null, requiredRole?: User
 }
 
 export const authOptions: NextAuthOptions = {
-  debug: true,
-
+  debug: process.env.NODE_ENV === 'development', // Only debug in development
+  
   session: {
     strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  
+  // Add cookies configuration
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" 
+        ? `__Secure-next-auth.session-token`
+        : `next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
 
   providers: [
@@ -72,6 +88,7 @@ export const authOptions: NextAuthOptions = {
           name: user.name,
           image: user.image,
           role: user.role,
+          skill_level: user.skill_level,
         };
       },
     }),
@@ -80,7 +97,7 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       console.log("JWT Callback - User:", user);
       if (user) {
         token.id = user.id;
@@ -88,9 +105,26 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.image = user.image;
         token.role = user.role || 'USER';
+        token.skill_level = user.skill_level || 'BEGINNER_2_0';
       }
+      
+      // If this is a sign-in with Google, fetch the user from the database
+      // to get their role and skill_level
+      if (account?.provider === 'google') {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email as string },
+          select: { role: true, skill_level: true }
+        });
+        
+        if (dbUser) {
+          token.role = dbUser.role;
+          token.skill_level = dbUser.skill_level;
+        }
+      }
+      
       return token;
     },
+    
     async session({ session, token }) {
       console.log("Session Callback - Token:", token);
       if (session?.user) {
@@ -99,16 +133,10 @@ export const authOptions: NextAuthOptions = {
         session.user.name = token.name as string;
         session.user.image = token.image as string;
         session.user.role = (token.role as UserRole) || 'USER';
+        session.user.skill_level = (token.skill_level as SkillLevel) || 'BEGINNER_2_0';
       }
       console.log("Session Callback - Session:", session);
       return session;
-    },
-    events: {
-      signOut: async ({ url }) => {
-        const baseUrl = url.origin || process.env.NEXTAUTH_URL || 'http://localhost:3000';
-        url.pathname = '/';
-        return baseUrl;
-      }
     },
   },
 };

@@ -35,17 +35,24 @@ export default function PlayerFinderPage() {
   const fetchListings = async () => {
     setLoading(true)
     try {
-      let url = '/api/players/listings'
+      // Use a timestamp to prevent caching issues
+      const timestamp = new Date().getTime()
+      let url = `/api/players/listings?_t=${timestamp}`
       if (skillFilter && skillFilter !== 'any') {
-        url += `?minSkill=${skillFilter}`
+        url += `&minSkill=${skillFilter}`
       }
       
+      console.log('Fetching listings from:', url)
       const response = await fetch(url)
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch listings')
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Fetch error response:', response.status, errorData);
+        throw new Error(`Failed to fetch listings: ${response.status}`);
       }
       
       const data = await response.json()
+      console.log('Received listings data:', data)
       setListings(data)
     } catch (error) {
       console.error('Error:', error)
@@ -56,10 +63,11 @@ export default function PlayerFinderPage() {
   }
   
   useEffect(() => {
-    if (session) {
+    if (status === 'authenticated' && session) {
+      console.log('Current session user:', session.user);
       fetchListings()
     }
-  }, [session, skillFilter])
+  }, [session, status, skillFilter])
   
   const handleRespond = async (listingId) => {
     try {
@@ -148,6 +156,17 @@ export default function PlayerFinderPage() {
           fetchListings()
         }}
       />
+      
+      {/* Debug info - only visible to admins */}
+      {session?.user?.role === 'ADMIN' && (
+        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
+          <h3 className="font-bold">Debug Info (Admin Only)</h3>
+          <p>User ID: {session.user.id}</p>
+          <p>Role: {session.user.role}</p>
+          <p>Skill Level: {session.user.skill_level}</p>
+          <p>Listings count: {listings.length}</p>
+        </div>
+      )}
       
       {/* Listings */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
