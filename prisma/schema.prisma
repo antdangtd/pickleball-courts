@@ -30,6 +30,8 @@ model User {
   Event          Event[]
   eventParticipations EventParticipant[]
   eventWaitlists      EventWaitlist[]
+  playerListings    PlayerListing[]
+  playerResponses   PlayerResponse[]
 }
 
 model Court {
@@ -163,6 +165,40 @@ model EventWaitlist {
   joinedAt  DateTime @default(now())
 
   @@id([userId, eventId])
+}
+
+model PlayerListing {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  timeSlot     String   // e.g., "Weekday mornings", "Weekend afternoons"
+  // Remove the availability field for now
+  minSkill     String?  // Minimum skill level they're willing to play with
+  maxSkill     String?  // Maximum skill level they're willing to play with
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  responses    PlayerResponse[]
+  active       Boolean  @default(true)
+}
+
+model PlayerResponse {
+  id          String   @id @default(cuid())
+  message     String?
+  listingId   String
+  listing     PlayerListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  status      ResponseStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum ResponseStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
 }
 
 enum SkillLevel {

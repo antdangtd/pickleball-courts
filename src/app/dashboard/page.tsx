@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import CourtsCalendar from "@/components/CourtsCalendar"
 import { CourtManagement } from "@/components/admin/CourtManagement"
+import { UserManagement } from "@/components/admin/UserManagement"
 
 export default function Dashboard() {
   const { data: session, status } = useSession({
@@ -156,7 +157,7 @@ export default function Dashboard() {
                 <CardDescription>Manage users and their permissions</CardDescription>
               </CardHeader>
               <CardContent>
-                <p>User management tools will be available here.</p>
+                <UserManagement />
               </CardContent>
             </Card>
           </TabsContent>

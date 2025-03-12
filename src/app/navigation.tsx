@@ -193,6 +193,9 @@ export function MainNavigation() {
             <Link href="/players/find" className="py-2 px-4 hover:bg-gray-100 rounded">
               Find Players
             </Link>
+            <Link href="/players/listings" className="...">
+              My Player Listings
+            </Link>
             <Link href="/tournaments" className="py-2 px-4 hover:bg-gray-100 rounded">
               Tournaments
             </Link>

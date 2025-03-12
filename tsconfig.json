@@ -29,6 +29,6 @@
     "esm": false,
     "experimentalSpecifierResolution": "node"
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.jsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.jsx", ".next/types/**/*.ts", "update-skill-levels.js"],
   "exclude": ["node_modules"]
 }
