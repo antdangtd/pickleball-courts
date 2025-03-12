@@ -1,4 +1,9 @@
 
+//scr/components/ui/button.tsx
+// This file is a simple button component that uses class-variance-authority
+// to apply different styles based on the variant and size prop.
+// It also includes a ButtonProps interface that extends the
+// React.ButtonHTMLAttributes interface and includes the variant and size props.
 
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -23,6 +28,7 @@ const buttonVariants = cva(
         default: "h-10 py-2 px-4",
         sm: "h-9 px-3 rounded-md",
         lg: "h-11 px-8 rounded-md",
+        icon: "h-10 w-10", // Add icon size variant that might be used elsewhere
       },
     },
     defaultVariants: {
@@ -34,10 +40,15 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  // Add asChild as an optional prop to prevent the warning
+  asChild?: boolean;
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant, size, asChild, ...props }, ref) => {
+    // We ignore the asChild prop since we're not using Slot,
+    // but including it in the interface prevents the warning
     return (
       <button
         className={cn(buttonVariants({ variant, size, className }))}
