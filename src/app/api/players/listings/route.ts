@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
-import { authOptions, isAdmin } from '@/lib/auth';
+import { authOptions } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,45 +12,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     
-    // Add detailed logging
-    console.log('User making request:', {
-      id: session.user.id,
-      email: session.user.email,
-      role: session.user.role,
-      skill_level: session.user.skill_level
-    });
-    
     // Get query parameters
     const url = new URL(request.url);
     const minSkill = url.searchParams.get('minSkill');
     const maxSkill = url.searchParams.get('maxSkill');
+    const viewMode = url.searchParams.get('viewMode') || 'all'; // 'all', 'mine', 'community'
     
-    // Build filter conditions
+    console.log('API: Request params:', { viewMode, minSkill, maxSkill });
+    
+    // Build filter conditions based on viewMode
     let whereClause: any = { active: true };
     
-    // Only admins can see all listings, regular users only see others' listings
-    if (session.user.role !== 'ADMIN') {
+    // Filter by listings ownership
+    if (viewMode === 'mine') {
+      // Show only the user's own listings
+      whereClause.userId = session.user.id;
+    } else if (viewMode === 'community') {
+      // Show only other users' listings
       whereClause.userId = { not: session.user.id };
     }
-    
-    // Log the where clause before skill filtering
-    console.log('Initial where clause:', whereClause);
+    // If viewMode is 'all', we don't add a userId filter
     
     // Add skill filters if provided
     if (minSkill && minSkill !== 'any') {
-      // If user specifies minSkill filter, find listings where maxSkill is at least this level
-      // (i.e., the listing accepts players up to at least this skill level)
-      whereClause.maxSkill = { gte: minSkill };
+      whereClause.OR = [
+        { maxSkill: { gte: minSkill } },
+        { maxSkill: null }
+      ];
     }
     
     if (maxSkill && maxSkill !== 'any') {
-      // If user specifies maxSkill filter, find listings where minSkill is at most this level
-      // (i.e., the listing accepts players down to at most this skill level)
-      whereClause.minSkill = { lte: maxSkill };
+      whereClause.OR = [
+        ...(whereClause.OR || []),
+        { minSkill: { lte: maxSkill } },
+        { minSkill: null }
+      ];
     }
     
-    // Log the final where clause
-    console.log('Final where clause:', whereClause);
+    console.log('API: Final where clause:', JSON.stringify(whereClause));
     
     const listings = await prisma.playerListing.findMany({
       where: whereClause,
@@ -66,6 +65,11 @@ export async function GET(request: NextRequest) {
           where: {
             userId: session.user.id
           }
+        },
+        _count: {
+          select: {
+            responses: true
+          }
         }
       },
       orderBy: {
@@ -73,12 +77,15 @@ export async function GET(request: NextRequest) {
       }
     });
     
-    // Log the result
-    console.log(`Found ${listings.length} listings`);
+    // Add ownership flag to each listing
+    const listingsWithOwnership = listings.map(listing => ({
+      ...listing,
+      isOwner: listing.userId === session.user.id
+    }));
     
-    return NextResponse.json(listings);
+    return NextResponse.json(listingsWithOwnership);
   } catch (error) {
-    console.error('Error fetching player listings:', error);
+    console.error('API Error fetching player listings:', error);
     return NextResponse.json({ error: 'Failed to fetch listings' }, { status: 500 });
   }
 }
