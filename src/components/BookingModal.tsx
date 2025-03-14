@@ -1,5 +1,5 @@
 // src/components/BookingModal.tsx
-// This file contains the booking modal component. The modal is used to create new events on the calendar for booking courts.
+// This file contains the booking modal component with react-hook-form implementation
 
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { format, parse, addHours } from 'date-fns';
+import { format } from 'date-fns';
+import { useForm, Controller } from "react-hook-form";
 
 // Event types
 const EVENT_TYPES = [
@@ -62,6 +63,20 @@ interface BookingModalProps {
   onSave: (event: any) => void;
 }
 
+// Form data type for react-hook-form
+interface BookingFormData {
+  title: string;
+  eventType: string;
+  minSkillLevel: string;
+  maxSkillLevel: string;
+  maxPlayers: number;
+  notes: string;
+  isMultiCourt: boolean;
+  selectedCourts: Record<string, boolean>;
+  selectedStartTime: string;
+  selectedEndTime: string;
+}
+
 export default function BookingModal({
   isOpen,
   onClose,
@@ -72,26 +87,34 @@ export default function BookingModal({
   allCourts = [],
   onSave
 }: BookingModalProps) {
-  const [title, setTitle] = useState("");
-  const [eventType, setEventType] = useState("OPEN_PLAY");
-  const [minSkillLevel, setMinSkillLevel] = useState("");
-  const [maxSkillLevel, setMaxSkillLevel] = useState("");
-  const [maxPlayers, setMaxPlayers] = useState(4);
-  const [notes, setNotes] = useState("");
-  const [isMultiCourt, setIsMultiCourt] = useState(false);
-  const [selectedCourts, setSelectedCourts] = useState<Record<string, boolean>>({});
+  // React Hook Form setup
+  const { control, handleSubmit, setValue, watch, reset, formState: { errors } } = useForm<BookingFormData>({
+    defaultValues: {
+      title: "",
+      eventType: "OPEN_PLAY",
+      minSkillLevel: "",
+      maxSkillLevel: "",
+      maxPlayers: 4,
+      notes: "",
+      isMultiCourt: false,
+      selectedCourts: {},
+      selectedStartTime: "07:00",
+      selectedEndTime: "11:00"
+    }
+  });
   
-  // Time selection state
-  const [selectedStartTime, setSelectedStartTime] = useState("07:00");
-  const [selectedEndTime, setSelectedEndTime] = useState("11:00");
+  // Watch values for reactive updates
+  const isMultiCourt = watch("isMultiCourt");
+  const selectedStartTime = watch("selectedStartTime");
+  const selectedEndTime = watch("selectedEndTime");
   const [selectedDate, setSelectedDate] = useState("");
-
+  
   // Initialize selected courts with the initially selected court
   useEffect(() => {
     if (courtId) {
-      setSelectedCourts({ [courtId]: true });
+      setValue("selectedCourts", { [courtId]: true });
     }
-  }, [courtId]);
+  }, [courtId, setValue]);
 
   // Initialize time fields when modal opens with new date/time
   useEffect(() => {
@@ -100,59 +123,54 @@ export default function BookingModal({
       const endDate = new Date(endTime);
       
       // Format the start and end times as HH:MM for the select inputs
-      setSelectedStartTime(format(startDate, 'HH:mm'));
-      setSelectedEndTime(format(endDate, 'HH:mm'));
+      setValue("selectedStartTime", format(startDate, 'HH:mm'));
+      setValue("selectedEndTime", format(endDate, 'HH:mm'));
       
       // Store the date part for later use in form submission
       setSelectedDate(format(startDate, 'yyyy-MM-dd'));
     }
-  }, [startTime, endTime]);
+  }, [startTime, endTime, setValue]);
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setTitle("");
-      setEventType("OPEN_PLAY");
-      setMinSkillLevel("");
-      setMaxSkillLevel("");
-      setMaxPlayers(4);
-      setNotes("");
-      setIsMultiCourt(false);
+      reset({
+        title: "",
+        eventType: "OPEN_PLAY",
+        minSkillLevel: "",
+        maxSkillLevel: "",
+        maxPlayers: 4,
+        notes: "",
+        isMultiCourt: false,
+        selectedCourts: courtId ? { [courtId]: true } : {},
+        selectedStartTime: startTime ? format(new Date(startTime), 'HH:mm') : "07:00",
+        selectedEndTime: endTime ? format(new Date(endTime), 'HH:mm') : "11:00"
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, reset, courtId, startTime, endTime]);
 
-  const handleCourtToggle = (courtId: string, checked: boolean) => {
-    setSelectedCourts(prev => ({
-      ...prev,
-      [courtId]: checked
-    }));
-  };
-
-  // Handle time changes
-  const handleStartTimeChange = (time: string) => {
-    setSelectedStartTime(time);
-    
-    // Ensure end time is at least 30 minutes after start time
-    const startHour = parseInt(time.split(':')[0]);
-    const startMinute = parseInt(time.split(':')[1]);
-    const endHour = parseInt(selectedEndTime.split(':')[0]);
-    const endMinute = parseInt(selectedEndTime.split(':')[1]);
-    
-    const startTotalMinutes = startHour * 60 + startMinute;
-    const endTotalMinutes = endHour * 60 + endMinute;
-    
-    if (endTotalMinutes <= startTotalMinutes) {
-      // If end time is before or equal to start time, set it to start time + 1 hour
-      const newEndHour = (startHour + 1) % 24;
-      setSelectedEndTime(`${newEndHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`);
+  // Handle time changes to ensure end time is after start time
+  useEffect(() => {
+    if (selectedStartTime && selectedEndTime) {
+      const startHour = parseInt(selectedStartTime.split(':')[0]);
+      const startMinute = parseInt(selectedStartTime.split(':')[1]);
+      const endHour = parseInt(selectedEndTime.split(':')[0]);
+      const endMinute = parseInt(selectedEndTime.split(':')[1]);
+      
+      const startTotalMinutes = startHour * 60 + startMinute;
+      const endTotalMinutes = endHour * 60 + endMinute;
+      
+      if (endTotalMinutes <= startTotalMinutes) {
+        // If end time is before or equal to start time, set it to start time + 1 hour
+        const newEndHour = (startHour + 1) % 24;
+        setValue("selectedEndTime", `${newEndHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`);
+      }
     }
-  };
+  }, [selectedStartTime, selectedEndTime, setValue]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const onSubmit = async (data: BookingFormData) => {
     // Get array of selected court IDs
-    const courtIds = Object.entries(selectedCourts)
+    const courtIds = Object.entries(data.selectedCourts)
       .filter(([_, isSelected]) => isSelected)
       .map(([id]) => id);
     
@@ -162,8 +180,8 @@ export default function BookingModal({
     }
 
     // Create proper date objects with the selected times
-    const startDateStr = `${selectedDate}T${selectedStartTime}:00`;
-    const endDateStr = `${selectedDate}T${selectedEndTime}:00`;
+    const startDateStr = `${selectedDate}T${data.selectedStartTime}:00`;
+    const endDateStr = `${selectedDate}T${data.selectedEndTime}:00`;
     
     const startDateTime = new Date(startDateStr);
     const endDateTime = new Date(endDateStr);
@@ -175,14 +193,14 @@ export default function BookingModal({
     
     try {
       const bookingData = {
-        title,
-        eventType,
-        minSkillLevel,
-        maxSkillLevel,
-        maxPlayers: Number(maxPlayers),
-        notes,
-        courtIds: isMultiCourt ? courtIds : undefined, // Send array if multi-court
-        courtId: !isMultiCourt ? courtIds[0] : undefined, // Send single ID if not multi-court
+        title: data.title,
+        eventType: data.eventType,
+        minSkillLevel: data.minSkillLevel,
+        maxSkillLevel: data.maxSkillLevel,
+        maxPlayers: Number(data.maxPlayers),
+        notes: data.notes,
+        courtIds: data.isMultiCourt ? courtIds : undefined, // Send array if multi-court
+        courtId: !data.isMultiCourt ? courtIds[0] : undefined, // Send single ID if not multi-court
         start: startDateTime.toISOString(),
         end: endDateTime.toISOString()
       };
@@ -222,24 +240,38 @@ export default function BookingModal({
           </DialogDescription>
         </DialogHeader>
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <Label htmlFor="title">Event Title</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter event title"
-              required
+            <Controller
+              name="title"
+              control={control}
+              rules={{ required: "Title is required" }}
+              render={({ field }) => (
+                <Input
+                  id="title"
+                  placeholder="Enter event title"
+                  {...field}
+                />
+              )}
             />
+            {errors.title && (
+              <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>
+            )}
           </div>
           
           <div>
             <div className="flex items-center space-x-2 mb-2">
-              <Checkbox 
-                id="isMultiCourt" 
-                checked={isMultiCourt} 
-                onCheckedChange={(checked) => setIsMultiCourt(checked === true)}
+              <Controller
+                name="isMultiCourt"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox 
+                    id="isMultiCourt" 
+                    checked={field.value} 
+                    onCheckedChange={field.onChange}
+                  />
+                )}
               />
               <Label htmlFor="isMultiCourt">Book Multiple Courts</Label>
             </div>
@@ -249,10 +281,17 @@ export default function BookingModal({
                 <div className="text-sm font-medium mb-2">Select Courts</div>
                 {allCourts.map(court => (
                   <div key={court.id} className="flex items-center space-x-2 mb-1">
-                    <Checkbox 
-                      id={`court-${court.id}`}
-                      checked={!!selectedCourts[court.id]}
-                      onCheckedChange={(checked) => handleCourtToggle(court.id, checked === true)}
+                    <Controller
+                      name={`selectedCourts.${court.id}`}
+                      control={control}
+                      defaultValue={false}
+                      render={({ field }) => (
+                        <Checkbox 
+                          id={`court-${court.id}`}
+                          checked={!!field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      )}
                     />
                     <Label htmlFor={`court-${court.id}`} className="text-sm">
                       {court.title}
@@ -271,111 +310,160 @@ export default function BookingModal({
           {/* Editable time selection */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="startTime">Start Time</Label>
-              <Select 
-                value={selectedStartTime} 
-                onValueChange={handleStartTimeChange}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select start time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="selectedStartTime">Start Time</Label>
+              <Controller
+                name="selectedStartTime"
+                control={control}
+                render={({ field }) => (
+                  <Select 
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select start time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div>
-              <Label htmlFor="endTime">End Time</Label>
-              <Select 
-                value={selectedEndTime} 
-                onValueChange={setSelectedEndTime}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select end time" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIME_OPTIONS.map(option => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="selectedEndTime">End Time</Label>
+              <Controller
+                name="selectedEndTime"
+                control={control}
+                render={({ field }) => (
+                  <Select 
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select end time" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map(option => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           </div>
           
           <div>
             <Label htmlFor="eventType">Event Type</Label>
-            <Select value={eventType} onValueChange={setEventType}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select event type" />
-              </SelectTrigger>
-              <SelectContent>
-                {EVENT_TYPES.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Controller
+              name="eventType"
+              control={control}
+              render={({ field }) => (
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select event type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_TYPES.map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="minSkillLevel">Minimum Skill Level</Label>
-              <Select value={minSkillLevel} onValueChange={setMinSkillLevel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SKILL_LEVELS.map((level) => (
-                    <SelectItem key={level.id} value={level.id}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="minSkillLevel"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SKILL_LEVELS.map((level) => (
+                        <SelectItem key={level.id} value={level.id}>
+                          {level.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div>
               <Label htmlFor="maxSkillLevel">Maximum Skill Level</Label>
-              <Select value={maxSkillLevel} onValueChange={setMaxSkillLevel}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SKILL_LEVELS.map((level) => (
-                    <SelectItem key={level.id} value={level.id}>
-                      {level.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Controller
+                name="maxSkillLevel"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SKILL_LEVELS.map((level) => (
+                        <SelectItem key={level.id} value={level.id}>
+                          {level.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           </div>
           
           <div>
             <Label htmlFor="maxPlayers">Maximum Players</Label>
-            <Input
-              id="maxPlayers"
-              type="number"
-              value={maxPlayers}
-              onChange={(e) => setMaxPlayers(parseInt(e.target.value))}
-              min={1}
-              max={100}
+            <Controller
+              name="maxPlayers"
+              control={control}
+              rules={{ 
+                required: "Required",
+                min: { value: 1, message: "Minimum 1 player" },
+                max: { value: 100, message: "Maximum 100 players" }
+              }}
+              render={({ field }) => (
+                <Input
+                  id="maxPlayers"
+                  type="number"
+                  min={1}
+                  max={100}
+                  {...field}
+                  onChange={(e) => field.onChange(parseInt(e.target.value))}
+                />
+              )}
             />
+            {errors.maxPlayers && (
+              <p className="text-sm text-red-500 mt-1">{errors.maxPlayers.message}</p>
+            )}
           </div>
           
           <div>
             <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional information"
+            <Controller
+              name="notes"
+              control={control}
+              render={({ field }) => (
+                <Textarea
+                  id="notes"
+                  placeholder="Additional information"
+                  {...field}
+                />
+              )}
             />
           </div>
           

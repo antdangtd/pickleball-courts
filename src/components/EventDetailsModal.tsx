@@ -1,5 +1,5 @@
 // src/components/EventDetailsModal.tsx
-// This file contains a modal component for displaying event details. The modal is used to show event information and allow users to join or leave the event.
+// This file contains a modal component for displaying event details with fixed skill level comparison.
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
@@ -101,76 +101,75 @@ export default function EventDetailsModal({
     return eventDetails && participants.length >= eventDetails.max_players;
   };
 
-  // Check if user meets the skill level requirements
+  // Check if user meets the skill level requirements - FIXED FUNCTION
   const userMeetsSkillLevel = () => {
     if (!eventDetails || !session?.user) {
-      console.log("Missing skill data:", {
-        eventDetails: !!eventDetails,
-        userSession: !!session?.user
-      });
       return false;
     }
-  
-    const userSkillLevel = session.user.skillLevel;
-  
+    
+    // Get user skill level from session
+    const userSkillLevel = session.user.skill_level;
+    
     if (!userSkillLevel) {
       console.log("User skill level not found in session");
-      return false;
+      return true; // Default to allowing if we can't determine
     }
-  
+    
+    console.log("User skill level from session:", userSkillLevel);
+    console.log("Event skill requirements:", {
+      min: eventDetails.min_skill,
+      max: eventDetails.max_skill
+    });
+    
+    // Skip check if event doesn't have skill requirements
+    if (!eventDetails.min_skill && !eventDetails.max_skill) {
+      return true;
+    }
+    
+    // Define skill levels in order from lowest to highest
     const skillLevels = [
-      'BEGINNER', 'BEGINNER_2_0', 'BEGINNER_2_25', 'BEGINNER_2_5',
-      'RISING_BEGINNER_2_75', 'LOW_INTERMEDIATE_3_0', 'INTERMEDIATE',
-      'INTERMEDIATE_3_25', 'INTERMEDIATE_3_5', 'RISING_INTERMEDIATE_3_75',
-      'LOW_ADVANCED_4_0', 'ADVANCED', 'ADVANCED_4_25', 'ADVANCED_4_5',
-      'RISING_ADVANCED_4_75', 'TOURNAMENT_5_0', 'PRO', 'PRO_5_5'
+      'BEGINNER_2_0',
+      'BEGINNER_2_25', 
+      'BEGINNER_2_5',
+      'RISING_BEGINNER_2_75', 
+      'LOW_INTERMEDIATE_3_0', 
+      'INTERMEDIATE_3_25',
+      'INTERMEDIATE_3_5', 
+      'RISING_INTERMEDIATE_3_75',
+      'LOW_ADVANCED_4_0', 
+      'ADVANCED_4_25', 
+      'ADVANCED_4_5',
+      'RISING_ADVANCED_4_75', 
+      'TOURNAMENT_5_0', 
+      'PRO_5_5'
     ];
-  
+    
+    // Get indices for comparison
     const userSkillIndex = skillLevels.indexOf(userSkillLevel);
     const minSkillIndex = eventDetails.min_skill ? skillLevels.indexOf(eventDetails.min_skill) : 0;
     const maxSkillIndex = eventDetails.max_skill ? skillLevels.indexOf(eventDetails.max_skill) : skillLevels.length - 1;
-  
-    console.log("Comparing skill levels:", {
-      userSkill: userSkillLevel,
-      minSkill: eventDetails.min_skill,
-      maxSkill: eventDetails.max_skill
-    });
-  
-    console.log("Skill level comparison details:", {
-      userSkillLevel,
+    
+    console.log("Skill level indices for comparison:", {
       userSkillIndex,
-      minSkill: eventDetails.min_skill,
       minSkillIndex,
-      maxSkill: eventDetails.max_skill,
-      maxSkillIndex,
-      meetsRequirements: userSkillIndex >= minSkillIndex && userSkillIndex <= maxSkillIndex,
-      userSkillFound: userSkillIndex !== -1,
-      minSkillFound: minSkillIndex !== -1,
-      maxSkillFound: maxSkillIndex !== -1
+      maxSkillIndex
     });
-  
-    // If any skill level is not found, allow fallback logic
-    if (userSkillIndex === -1 || minSkillIndex === -1 || maxSkillIndex === -1) {
-      console.warn("One or more skill levels not found in skill levels array!");
-      
-      if (userSkillIndex === -1) {
-        const userSkill = String(userSkillLevel).toLowerCase();
-        if (userSkill.includes('beginner')) {
-          return eventDetails.min_skill?.toLowerCase().includes('beginner') || !eventDetails.min_skill;
-        } else if (userSkill.includes('intermediate')) {
-          return eventDetails.min_skill?.toLowerCase().includes('beginner') || 
-                eventDetails.min_skill?.toLowerCase().includes('intermediate') || 
-                !eventDetails.min_skill;
-        }
-      }
-  
-      console.log("Defaulting to allowing access due to comparison issues");
+    
+    // If user skill level is not found in our list, allow them to join
+    if (userSkillIndex === -1) {
+      console.log("User skill level not found in skill level list, allowing access");
       return true;
     }
-  
-    return userSkillIndex >= minSkillIndex && userSkillIndex <= maxSkillIndex;
+    
+    // If min or max skill level not found, ignore that constraint
+    const minCheck = minSkillIndex === -1 || userSkillIndex >= minSkillIndex;
+    const maxCheck = maxSkillIndex === -1 || userSkillIndex <= maxSkillIndex;
+    
+    const meetsRequirements = minCheck && maxCheck;
+    console.log("User meets requirements:", meetsRequirements);
+    
+    return meetsRequirements;
   };
-  
 
   // Join the event
   const handleJoinEvent = async () => {
@@ -376,6 +375,7 @@ export default function EventDetailsModal({
     );
   };
 
+  // Fixed rendering of loading state to avoid HTML nesting issues
   if (isLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -383,9 +383,7 @@ export default function EventDetailsModal({
           <DialogHeader>
             <DialogTitle>Loading</DialogTitle>
             <DialogDescription>
-              <div className="flex justify-center items-center h-40">
-                <p>Loading event details...</p>
-              </div>
+              Loading event details...
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
@@ -400,9 +398,7 @@ export default function EventDetailsModal({
           <DialogHeader>
             <DialogTitle>Not Found</DialogTitle>
             <DialogDescription>
-              <div className="flex justify-center items-center h-40">
-                <p>Event details not found</p>
-              </div>
+              Event details not found
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
@@ -427,7 +423,7 @@ export default function EventDetailsModal({
             <div className="flex flex-wrap gap-2 mt-2">
               <Badge variant="outline">{eventTypeMap[eventDetails.type] || eventDetails.type}</Badge>
               <Badge variant="outline">{participants.length}/{eventDetails.max_players} Players</Badge>
-              {eventDetails.min_skill && (
+              {(eventDetails.min_skill || eventDetails.max_skill) && (
                 <Badge variant="outline">Skill: {renderSkillLevel()}</Badge>
               )}
             </div>

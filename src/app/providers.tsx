@@ -1,24 +1,24 @@
-// src/app/providers.tsx
 'use client'
 
-import { useEffect } from 'react'
-import { SessionProvider } from 'next-auth/react'
+import { SessionProvider } from "next-auth/react"
+import { ThemeProvider } from "@/components/theme-provider"
 
 export function Providers({ 
   children,
-  session = null
+  session
 }: { 
-  children: React.ReactNode,
-  session?: any
+  children: React.ReactNode
+  session: any
 }) {
-  // Add debug logging for session issues
-  useEffect(() => {
-    console.log('Provider mounted with session:', session ? 'Session exists' : 'No session')
-  }, [session])
-
   return (
-    <SessionProvider session={session}>
-      {children}
-    </SessionProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+    >
+      <SessionProvider session={session}>
+        {children}
+      </SessionProvider>
+    </ThemeProvider>
   )
 }

@@ -1,5 +1,5 @@
 // src/components/CourtsCalendar.tsx
-// This file contains the courts calendar component. The component fetches a list of courts from the API and displays them in a calendar view. The component allows users to create events on the calendar for booking courts.
+// This file contains the courts calendar component with React Query implementation
 
 'use client'
 
@@ -15,7 +15,8 @@ import BookingModal from './BookingModal'
 import { format } from 'date-fns'
 import EventDetailsModal from './EventDetailsModal';
 import { useSession } from 'next-auth/react';
-
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import socketService from '@/lib/socketService';
 
 type ResourceInput = {
   id: string;
@@ -30,151 +31,151 @@ interface Court {
   description?: string | null
 }
 
+// API fetch functions
+const fetchCourts = async (): Promise<Court[]> => {
+  const response = await fetch('/api/courts');
+  if (!response.ok) {
+    throw new Error('Failed to fetch courts');
+  }
+  return response.json();
+};
+
+const fetchEvents = async (): Promise<any[]> => {
+  const response = await fetch('/api/events');
+  if (!response.ok) {
+    throw new Error('Failed to fetch events');
+  }
+  return response.json();
+};
+
 export default function CourtsCalendar() {
   const calendarRef = useRef<any>(null);
-  const [courts, setCourts] = useState<ResourceInput[]>([])
-  const [events, setEvents] = useState<EventInput[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [events, setEvents] = useState<EventInput[]>([]);
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  
   const canCreateEvents = session?.user?.role === 'ADMIN' || session?.user?.role === 'COURT_MANAGER';
   
   // State variables for booking modal
-  const [selectedStartTime, setSelectedStartTime] = useState<string | null>(null)
-  const [selectedEndTime, setSelectedEndTime] = useState<string | null>(null)
-  const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null)
-  const [selectedCourtName, setSelectedCourtName] = useState<string | null>(null)
-  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
+  const [selectedStartTime, setSelectedStartTime] = useState<string | null>(null);
+  const [selectedEndTime, setSelectedEndTime] = useState<string | null>(null);
+  const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
+  const [selectedCourtName, setSelectedCourtName] = useState<string | null>(null);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
   
+  // Use React Query for courts data
+  const { 
+    data: courtsData, 
+    isLoading: isLoadingCourts, 
+    error: courtsError
+  } = useQuery({
+    queryKey: ['courts'],
+    queryFn: fetchCourts,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    refetchOnWindowFocus: false,
+  });
+  
+  // Use React Query for events data  
+  const { 
+    data: eventsData, 
+    isLoading: isLoadingEvents,
+    error: eventsError,
+    refetch: refetchEvents
+  } = useQuery({
+    queryKey: ['events'],
+    queryFn: fetchEvents,
+    staleTime: 1 * 60 * 1000, // Consider data fresh for 1 minute (more frequent updates)
+    refetchOnWindowFocus: true,
+    enabled: !isLoadingCourts, // Only fetch events once courts are loaded
+  });
 
-  // Debug effect for modal state
-  useEffect(() => {
-    console.log("Booking modal open state:", isBookingModalOpen);
-  }, [isBookingModalOpen]);
-
-  // Fetch courts when component mounts
-  useEffect(() => {
-    async function fetchCourts() {
-      try {
-        setIsLoading(true)
-        console.log("Fetching courts...")
-        const response = await fetch('/api/courts')
-        
-        if (!response.ok) {
-          console.error("Court fetch response not OK:", response.status)
-          throw new Error('Failed to fetch courts')
-        }
-        
-        const courtsData: Court[] = await response.json()
-        console.log("Courts data from API:", courtsData)
-        
-        // Transform courts into FullCalendar resources
-        if (courtsData && courtsData.length > 0) {
-          const resources: ResourceInput[] = courtsData.map(court => ({
-            id: court.id,
-            title: `${court.name} (${court.is_indoor ? 'Indoor' : 'Outdoor'})`
-          }))
-          
-          setCourts(resources)
-          console.log("Using actual courts:", resources)
-        } else {
-          // If no courts in database, show a message
-          setCourts([
-            { id: 'no-courts', title: 'No courts available - Add courts in Dashboard' }
-          ])
-          console.log("No courts found in database")
-        }
-      } catch (error) {
-        console.error('Error fetching courts:', error)
-        setError('Failed to load courts')
-        
-        // Show a friendly message if courts failed to load
-        setCourts([
-          { id: 'error-court', title: 'Error loading courts - Please check console' }
-        ])
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    fetchCourts()
-  }, [])
-
-  // Fetch existing events
-  useEffect(() => {
-    async function fetchEvents() {
-      try {
-        const response = await fetch('/api/events')
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch events')
-        }
-        
-        const eventsData = await response.json()
-        console.log("Events data from API:", eventsData)
-        
-        // Transform events for FullCalendar
-        let formattedEvents: EventInput[] = []
-        
-        eventsData.forEach((event: any) => {
-          // Handle multi-court events
-          if (event.courts && event.courts.length > 0) {
-            // For multi-court events, create an event instance for each court
-            event.courts.forEach((courtEvent: any) => {
-              formattedEvents.push({
-                id: `${event.id}-${courtEvent.courtId}`,
-                title: event.title,
-                start: event.start,
-                end: event.end,
-                resourceId: courtEvent.courtId,
-                backgroundColor: '#4caf50', // Make multi-court events green
-                borderColor: '#388e3c',
-                extendedProps: {
-                  eventId: event.id,
-                  eventType: event.type,
-                  minSkillLevel: event.min_skill,
-                  maxSkillLevel: event.max_skill,
-                  maxPlayers: event.max_players,
-                  notes: event.notes,
-                  isMultiCourt: true,
-                  totalCourts: event.courts.length
-                }
-              })
-            })
-          } else if (event.courtId) {
-            // Single court event (backward compatibility)
-            formattedEvents.push({
-              id: event.id,
-              title: event.title,
-              start: event.start,
-              end: event.end,
-              resourceId: event.courtId,
-              extendedProps: {
-                eventType: event.type,
-                minSkillLevel: event.min_skill,
-                maxSkillLevel: event.max_skill,
-                maxPlayers: event.max_players,
-                notes: event.notes,
-                isMultiCourt: false
-              }
-            })
-          }
-        })
-        
-        setEvents(formattedEvents)
-        console.log("Formatted events for calendar:", formattedEvents)
-      } catch (error) {
-        console.error('Error fetching events:', error)
-      }
+  // Transform courts into FullCalendar resources
+  const courts: ResourceInput[] = React.useMemo(() => {
+    if (!courtsData || courtsData.length === 0) {
+      return [{ id: 'no-courts', title: 'No courts available - Add courts in Dashboard' }];
     }
     
-    if (!isLoading) {
-      fetchEvents()
+    return courtsData.map(court => ({
+      id: court.id,
+      title: `${court.name} (${court.is_indoor ? 'Indoor' : 'Outdoor'})`
+    }));
+  }, [courtsData]);
+  
+  // Transform events for FullCalendar when events data changes
+  useEffect(() => {
+    if (!eventsData) return;
+    
+    let formattedEvents: EventInput[] = [];
+    
+    eventsData.forEach((event: any) => {
+      // Handle multi-court events
+      if (event.courts && event.courts.length > 0) {
+        // For multi-court events, create an event instance for each court
+        event.courts.forEach((courtEvent: any) => {
+          formattedEvents.push({
+            id: `${event.id}-${courtEvent.courtId}`,
+            title: event.title,
+            start: event.start,
+            end: event.end,
+            resourceId: courtEvent.courtId,
+            backgroundColor: '#4caf50', // Make multi-court events green
+            borderColor: '#388e3c',
+            extendedProps: {
+              eventId: event.id,
+              eventType: event.type,
+              minSkillLevel: event.min_skill,
+              maxSkillLevel: event.max_skill,
+              maxPlayers: event.max_players,
+              notes: event.notes,
+              isMultiCourt: true,
+              totalCourts: event.courts.length
+            }
+          });
+        });
+      } else if (event.courtId) {
+        // Single court event (backward compatibility)
+        formattedEvents.push({
+          id: event.id,
+          title: event.title,
+          start: event.start,
+          end: event.end,
+          resourceId: event.courtId,
+          extendedProps: {
+            eventType: event.type,
+            minSkillLevel: event.min_skill,
+            maxSkillLevel: event.max_skill,
+            maxPlayers: event.max_players,
+            notes: event.notes,
+            isMultiCourt: false
+          }
+        });
+      }
+    });
+    
+    setEvents(formattedEvents);
+  }, [eventsData]);
+  
+  // Join socket rooms for events when events data changes
+  useEffect(() => {
+    if (eventsData && session?.user?.id) {
+      // Join rooms for all events to get updates
+      eventsData.forEach((event: any) => {
+        socketService.joinEventRoom(event.id);
+      });
     }
-  }, [isLoading])
-
+    
+    // Cleanup function to leave rooms when component unmounts
+    return () => {
+      if (eventsData && session?.user?.id) {
+        eventsData.forEach((event: any) => {
+          socketService.leaveEventRoom(event.id);
+        });
+      }
+    };
+  }, [eventsData, session?.user?.id]);
+  
   const handleEventClick = (clickInfo: any) => {
     console.log("Event clicked:", clickInfo.event);
     setSelectedEvent(clickInfo.event);
@@ -221,49 +222,21 @@ export default function CourtsCalendar() {
   const handleEventSaved = (savedEvent: any) => {
     console.log("Event saved:", savedEvent);
     
-    // For multi-court events, we'll get an array of court IDs
-    if (savedEvent.courts && savedEvent.courts.length > 0) {
-      // Create an event instance for each court
-      const newEvents = savedEvent.courts.map((court: any) => ({
-        id: `${savedEvent.id}-${court.courtId}`,
-        title: savedEvent.title,
-        start: savedEvent.start,
-        end: savedEvent.end,
-        resourceId: court.courtId,
-        backgroundColor: '#4caf50', // Green for multi-court events
-        borderColor: '#388e3c',
-        extendedProps: {
-          eventId: savedEvent.id,
-          eventType: savedEvent.type,
-          minSkillLevel: savedEvent.min_skill,
-          maxSkillLevel: savedEvent.max_skill,
-          maxPlayers: savedEvent.max_players,
-          notes: savedEvent.notes,
-          isMultiCourt: true,
-          totalCourts: savedEvent.courts.length
-        }
-      }));
-      
-      setEvents(prev => [...prev, ...newEvents]);
-      toast.success(`Event created across ${savedEvent.courts.length} courts`);
-    } else {
-      // Handle single court events as before
-      setEvents(prev => [...prev, {
-        id: savedEvent.id,
-        title: savedEvent.title,
-        start: savedEvent.start,
-        end: savedEvent.end,
-        resourceId: savedEvent.courtId,
-        extendedProps: {
-          eventType: savedEvent.type,
-          minSkillLevel: savedEvent.min_skill,
-          maxSkillLevel: savedEvent.max_skill,
-          maxPlayers: savedEvent.max_players,
-          notes: savedEvent.notes,
-          isMultiCourt: false
-        }
-      }]);
-    }
+    // Invalidate and refetch events query to get the latest data
+    queryClient.invalidateQueries({ queryKey: ['events'] });
+    
+    toast.success(`Event created successfully`);
+  };
+  
+  // Handle event details close/refresh
+  const handleEventDetailsClose = () => {
+    setIsEventDetailsModalOpen(false);
+    setSelectedEvent(null);
+  };
+  
+  const handleEventDetailsRefresh = () => {
+    // Invalidate and refetch events query
+    queryClient.invalidateQueries({ queryKey: ['events'] });
   };
 
   // Calendar configuration with support for multi-court events and multi-hour scheduling
@@ -276,8 +249,8 @@ export default function CourtsCalendar() {
     ],
     initialView: typeof window !== 'undefined' && window.innerWidth < 768 ? "timeGridDay" : "resourceTimeGridDay",
     nowIndicator: true,
-    editable: false, // Disable dragging existing events for now
-    selectable: false, // Disable drag-selection since it's not working
+    editable: false, // Disable dragging existing events
+    selectable: false, // Disable drag-selection 
     selectMirror: true,
     selectMinDistance: 1,
     dayMaxEvents: true,
@@ -383,6 +356,10 @@ export default function CourtsCalendar() {
     };
   }, []);
 
+  // Loading and error states
+  const isLoading = isLoadingCourts || isLoadingEvents;
+  const error = courtsError || eventsError;
+
   return (
     <div className="w-full overflow-x-auto">
       {isLoading ? (
@@ -401,6 +378,18 @@ export default function CourtsCalendar() {
             </button>
           )}
           
+          {/* Refresh button */}
+          <button 
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['events'] });
+              refetchEvents();
+              toast.info('Refreshing calendar data...');
+            }}
+            className="mb-4 ml-2 px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          >
+            Refresh Calendar
+          </button>
+          
           <div className="calendar-container">
             <FullCalendar 
               ref={calendarRef}
@@ -410,7 +399,17 @@ export default function CourtsCalendar() {
           
           {error && (
             <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded">
-              <p className="text-amber-700">{error}</p>
+              <p className="text-amber-700">{(error as Error).message || 'An error occurred'}</p>
+              <button
+                onClick={() => {
+                  queryClient.invalidateQueries({ queryKey: ['courts'] });
+                  queryClient.invalidateQueries({ queryKey: ['events'] });
+                  toast.info('Retrying...');
+                }}
+                className="mt-2 px-3 py-1 bg-amber-100 text-amber-800 rounded hover:bg-amber-200"
+              >
+                Retry
+              </button>
             </div>
           )}
           
@@ -428,7 +427,12 @@ export default function CourtsCalendar() {
             onSave={handleEventSaved}
           />
           
-          {/* Keep your EventDetailsModal here if it exists */}
+          <EventDetailsModal
+            isOpen={isEventDetailsModalOpen}
+            onClose={handleEventDetailsClose}
+            event={selectedEvent}
+            onRefresh={handleEventDetailsRefresh}
+          />
         </>
       )}
     </div>
