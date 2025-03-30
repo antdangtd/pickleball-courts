@@ -1,7 +1,6 @@
 //src/app/navigation.tsx
 // This file contains the main navigation component. The navigation component contains links to browse courts, book courts, find players, and access the admin console. The component also includes user actions such as login, profile, and logout.
 
-// src/app/navigation.tsx
 'use client'
 
 import { useState } from 'react'
@@ -26,16 +25,17 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
 import { Users, Menu, X } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle' // Import the theme toggle
 
 export function MainNavigation() {
   const { data: session } = useSession()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
   return (
-    <header className="bg-white shadow-sm">
+    <header className="bg-background shadow-sm border-b border-border">
       <div className="container mx-auto px-4 flex justify-between items-center py-4">
         {/* Logo */}
-        <Link href="/" className="text-2xl font-bold text-green-700">
+        <Link href="/" className="text-2xl font-bold text-primary">
           PickleBall Courts
         </Link>
 
@@ -141,8 +141,11 @@ export function MainNavigation() {
             </NavigationMenuList>
           </NavigationMenu>
 
-          {/* User Actions */}
-          <div className="flex items-center">
+          {/* Theme Toggle and User Actions */}
+          <div className="flex items-center space-x-2">
+            {/* Add Theme Toggle here */}
+            <ThemeToggle />
+            
             {session ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -183,32 +186,38 @@ export function MainNavigation() {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="absolute top-16 left-0 right-0 bg-white shadow-md p-4 z-50 md:hidden flex flex-col space-y-4">
-            <Link href="/courts" className="py-2 px-4 hover:bg-gray-100 rounded">
+          <div className="absolute top-16 left-0 right-0 bg-background shadow-md p-4 z-50 md:hidden flex flex-col space-y-4">
+            <Link href="/courts" className="py-2 px-4 hover:bg-accent rounded">
               Find Courts
             </Link>
-            <Link href="/bookings/new" className="py-2 px-4 hover:bg-gray-100 rounded">
+            <Link href="/bookings/new" className="py-2 px-4 hover:bg-accent rounded">
               Book a Court
             </Link>
-            <Link href="/players/find" className="py-2 px-4 hover:bg-gray-100 rounded">
+            <Link href="/players/find" className="py-2 px-4 hover:bg-accent rounded">
               Find Players
             </Link>
-            <Link href="/players/listings" className="...">
+            <Link href="/players/listings" className="py-2 px-4 hover:bg-accent rounded">
               My Player Listings
             </Link>
-            <Link href="/tournaments" className="py-2 px-4 hover:bg-gray-100 rounded">
+            <Link href="/tournaments" className="py-2 px-4 hover:bg-accent rounded">
               Tournaments
             </Link>
-            <Link href="/bookings" className="py-2 px-4 hover:bg-gray-100 rounded">
+            <Link href="/bookings" className="py-2 px-4 hover:bg-accent rounded">
               My Bookings
             </Link>
-            <Link href="/dashboard" className="py-2 px-4 hover:bg-gray-100 rounded">
+            <Link href="/dashboard" className="py-2 px-4 hover:bg-accent rounded">
               Dashboard
             </Link>
             
+            {/* Add Theme Toggle to mobile menu */}
+            <div className="py-2 px-4 flex justify-between items-center">
+              <span>Theme</span>
+              <ThemeToggle />
+            </div>
+            
             {session ? (
               <>
-                <Link href="/profile/complete" className="py-2 px-4 hover:bg-gray-100 rounded">
+                <Link href="/profile/complete" className="py-2 px-4 hover:bg-accent rounded">
                   Profile
                 </Link>
                 <Button 
